@@ -1,0 +1,10 @@
+step1 copy the link of amazon s3
+
+step2 go to cloud formation in aws
+
+step3 give the link of the s3 bucket in the url for the template in s3
+
+step4 configure according to your requirment
+
+step5  click on create stack (it will lanuch all the resources)
+
