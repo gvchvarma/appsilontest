@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'RStudio Team Standalone'
+Description: 'RStudio assesment appsilon'
 
 Parameters:
   useVPC:
