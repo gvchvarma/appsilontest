@@ -1,0 +1,174 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'RStudio Team Standalone'
+
+Parameters:
+  useVPC:
+    Type: AWS::EC2::VPC::Id
+    Description: "VPC to deploy the cluster into."
+  useSubnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Subnet to deploy the cluster into. Must be in the selected VPC."
+  cidrIpHTTP:
+    Type: String
+    Description: "Security groups CIDR range for ports 80 and 443."
+    Default: "0.0.0.0/0"
+  cidrIpSSH:
+    Type: String
+    Description: "Security groups CIDR range for port 22."
+    Default: "0.0.0.0/0"
+  keyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    AllowedPattern: ".+"
+    ConstraintDescription: Must select an existing EC2 KeyPair
+    Description: "AWS key pair to use to SSH to the VMs. SSH username for the VMs are ubuntu (has sudo privilege). SSH into machines for changing configuration, reviewing logs, etc."
+  
+  rscInstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t3.large
+      - t3.xlarge
+      - t3.2xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.8xlarge
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - c5.4xlarge
+      - r5.large
+      - r5.xlarge
+      - r5.2xlarge
+      - r5.4xlarge
+      - r5.8xlarge
+      - r5.12xlarge
+      - r5.16xlarge
+      - r5.24xlarge
+    Description: EC2 Instance type for RStudio Connect. Default is t2.micro.
+  rscDiskSize:
+    Type: Number
+    Default: 30
+    MinValue: 30
+    Description: Volume size for RStudio Connect EC2 Instance. Min 30 GB.
+
+Metadata:
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: Global Network configuration
+        Parameters:
+          - useVPC
+          - useSubnet
+          - cidrIpHTTP
+          - cidrIpSSH
+      -
+        Label:
+          default: Global EC2 resource configuration
+        Parameters:
+          - keyName
+      -
+        Label:
+          default: RStudio Connect EC2 resource configuration
+        Parameters:
+          - rscInstanceType
+          - rscDiskSize
+      
+    ParameterLabels:
+      useSubnet:
+        default: "Deploy to Subnet"
+      useVPC:
+        default: "Deploy to VPC"
+      cidrIpHTTP:
+        default: "Security group CIDR Range for HTTP/HTTPS"
+      cidrIpSSH:
+        default: "Security group CIDR Range for SSH"
+      useVPC:
+        default: "Deploy to VPC"
+      keyName:
+        default : "AWS keypair"
+
+      rscInstanceType:
+        default : "RStudio Connect Instance Type"
+      rscDiskSize:
+        default : "RStudio Connect Disk Size"
+    
+
+Mappings:
+
+  RSCRegionMap:
+    
+    ap-south-1:
+      AMI: ami-0e2c4bdf7b1ed63be
+
+Resources:
+
+  RSCInstance:
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT10M
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join ["-", [!Ref "AWS::StackName", "RStudioConnect"]]
+      ImageId: !FindInMap [RSCRegionMap, !Ref "AWS::Region", AMI]
+      KeyName: !Ref keyName
+      InstanceType: !Ref rscInstanceType
+      NetworkInterfaces:
+        - DeleteOnTermination: "true"
+          AssociatePublicIpAddress: "true"
+          DeviceIndex: 0
+          SubnetId: !Ref useSubnet
+          GroupSet: [!Ref RSCSecurityGroup]
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref rscDiskSize
+            DeleteOnTermination: true
+            VolumeType: gp2
+      UserData:
+        Fn::Base64: !Sub
+           #!/bin/bash
+
+
+           sudo apt-get install r-base libapparmor1 gdebi-core
+
+           wget https://download2.rstudio.org/rs
+   
+           
+          sudo gdebi rstudio-server-1.1.383-amd64.deb
+                      
+                 
+                       
+
+  RSCSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RStudio Connect Access
+      VpcId: !Ref useVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: !Ref cidrIpSSH
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: !Ref cidrIpHTTP
+      - IpProtocol:  tcp
+        FromPort: '8787'
+        ToPort: '8787'
+        CidrIp: !Ref cidrIpHTTP
+
+  RSCSecurityGroupSelfIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RSCSecurityGroup
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref RSCSecurityGroup
